@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="th" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimal HTML Reader</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Kanit', 'sans-serif'],
+                        mono: ['Fira Code', 'Monaco', 'Consolas', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- PrismJS for Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
+
+    <style>
+        /* Minimalist scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(156, 163, 175, 0.4);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(156, 163, 175, 0.7);
+        }
+        pre[class*="language-"] {
+            margin: 0;
+            border-radius: 0;
+            height: 100%;
+            background: transparent !important;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.875rem;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-950 text-gray-800 dark:text-gray-200 h-full flex flex-col font-sans transition-colors duration-200 overflow-hidden" id="appBody">
+
+    <!-- Minimalist Top Navigation Bar -->
+    <header class="bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200/80 dark:border-gray-800 px-4 py-2 flex items-center justify-between flex-none z-20 transition-colors">
+        
+        <!-- Left: Sidebar Toggle & File Info -->
+        <div class="flex items-center space-x-3">
+            <button onclick="toggleSidebar()" class="p-1.5 text-gray-600 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all text-sm flex items-center gap-1.5" title="ซ่อน/แสดง รายการไฟล์ (Sidebar)">
+                <i class="fa-solid fa-bars-staggered"></i>
+                <span class="text-xs font-medium hidden md:inline">เมนูไฟล์</span>
+            </button>
+            
+            <label for="fileInput" class="cursor-pointer bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 text-indigo-600 dark:text-indigo-400 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all border border-indigo-200/50 dark:border-indigo-800/50">
+                <i class="fa-solid fa-plus"></i>
+                <span>เพิ่มไฟล์</span>
+            </label>
+            <input type="file" id="fileInput" accept=".html,.htm,.txt" multiple class="hidden" onchange="handleFileSelect(event)">
+            
+            <div class="h-4 w-px bg-gray-300 dark:bg-gray-700 hidden sm:block"></div>
+            
+            <span id="displayFileName" class="text-xs font-semibold text-gray-700 dark:text-gray-300 truncate max-w-[150px] sm:max-w-xs" title="ชื่อไฟล์ที่เปิดอยู่">
+                sample.html
+            </span>
+        </div>
+
+        <!-- Center: Subtle View Switcher -->
+        <div class="bg-gray-100 dark:bg-gray-800 p-0.5 rounded-lg flex items-center border border-gray-200/60 dark:border-gray-700/60">
+            <button id="btnPreview" onclick="setViewMode('preview')" class="px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm">
+                <i class="fa-solid fa-eye"></i>
+                <span class="hidden sm:inline">Preview</span>
+            </button>
+            <button id="btnCode" onclick="setViewMode('code')" class="px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
+                <i class="fa-solid fa-code"></i>
+                <span class="hidden sm:inline">Code</span>
+            </button>
+            <button id="btnSplit" onclick="setViewMode('split')" class="px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
+                <i class="fa-solid fa-columns"></i>
+                <span class="hidden sm:inline">Split</span>
+            </button>
+        </div>
+
+        <!-- Right: Utility Controls -->
+        <div class="flex items-center space-x-1">
+            <button onclick="copyCurrentCode()" class="p-1.5 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md transition-colors text-sm" title="คัดลอกโค้ด">
+                <i class="fa-regular fa-copy"></i>
+            </button>
+            <button onclick="toggleFullscreen()" class="p-1.5 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md transition-colors text-sm" title="เต็มจอ (Fullscreen)">
+                <i class="fa-solid fa-expand"></i>
+            </button>
+            <button onclick="toggleDarkMode()" class="p-1.5 text-gray-500 hover:text-amber-500 dark:text-gray-400 dark:hover:text-amber-400 rounded-md transition-colors text-sm" title="สลับ Dark/Light Mode">
+                <i id="themeIcon" class="fa-solid fa-moon"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace with Sidebar -->
+    <main class="flex-1 flex overflow-hidden relative" id="dropArea">
+        
+        <!-- Floating Expand Button (Shows when sidebar is hidden) -->
+        <button id="floatingExpandBtn" onclick="toggleSidebar()" class="hidden absolute top-3 left-3 z-30 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 p-2 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-gray-700 transition-all text-xs flex items-center gap-2">
+            <i class="fa-solid fa-chevron-right"></i>
+            <span>เปิดรายการไฟล์</span>
+        </button>
+
+        <!-- Left Sidebar: File Explorer -->
+        <aside id="sidebar" class="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col transition-all duration-300 ease-in-out z-10 flex-none relative">
+            <div class="p-3 border-b border-gray-100 dark:border-gray-800/80 flex items-center justify-between">
+                <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <i class="fa-solid fa-folder-tree"></i> ไฟล์ทั้งหมด (<span id="fileCount">0</span>)
+                </span>
+                <div class="flex items-center gap-2">
+                    <button onclick="clearAllFiles()" class="text-[11px] text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-medium hover:underline mr-1">
+                        ลบทั้งหมด
+                    </button>
+                    <!-- Collapse Button on Sidebar Top Right -->
+                    <button onclick="toggleSidebar()" class="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-all" title="ซ่อนแถบข้าง">
+                        <i class="fa-solid fa-chevron-left text-xs"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- File List Container -->
+            <div id="fileList" class="flex-1 overflow-y-auto p-2 space-y-1">
+                <!-- Dynamic File Items Rendered Here -->
+            </div>
+        </aside>
+
+        <!-- Drag & Drop Overlay Indicator -->
+        <div id="dragOverlay" class="absolute inset-0 bg-indigo-600/10 dark:bg-indigo-500/20 backdrop-blur-sm border-2 border-dashed border-indigo-500 rounded-none z-50 flex flex-col items-center justify-center text-indigo-600 dark:text-indigo-400 transition-opacity duration-200 opacity-0 pointer-events-none">
+            <i class="fa-solid fa-cloud-arrow-up text-5xl mb-3 animate-bounce"></i>
+            <p class="text-base font-semibold">วางไฟล์ HTML ตรงนี้เพื่อเปิดอ่าน</p>
+        </div>
+
+        <!-- Preview Pane (Default View) -->
+        <div id="previewPane" class="flex-1 h-full w-full bg-white relative transition-all duration-200">
+            <iframe id="htmlFrame" class="w-full h-full border-0" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+
+        <!-- Source Code Pane (Hidden by Default) -->
+        <div id="codePane" class="hidden flex-1 h-full w-full bg-gray-900 text-gray-100 overflow-auto border-l border-gray-800 transition-all duration-200">
+            <div class="p-4 min-h-full">
+                <pre><code id="codeViewer" class="language-html"></code></pre>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-gray-900/90 dark:bg-gray-800/90 text-white px-4 py-2 rounded-xl shadow-lg border border-gray-700/50 flex items-center gap-2.5 text-xs transform translate-y-16 opacity-0 transition-all duration-300 z-50 pointer-events-none backdrop-blur-md">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-green-400"></i>
+        <span id="toastMessage">แจ้งเตือน</span>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        // Multi-File Store State
+        let filesList = [];
+        let activeFileId = null;
+        let viewMode = 'preview'; // Default view is PREVIEW
+
+        // Sample HTML Document
+        const sampleHTML = `<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>บทความตัวอย่าง - ศิลปะแห่งการอ่านอย่างมีสมาธิ</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #fcfbf9;
+            --text-color: #2d3748;
+            --accent-color: #4f46e5;
+            --border-color: #e2e8f0;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #121826;
+                --text-color: #e2e8f0;
+                --accent-color: #818cf8;
+                --border-color: #1f2937;
+            }
+        }
+        body {
+            font-family: 'Sarabun', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.8;
+            margin: 0;
+            padding: 2rem 1rem;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            max-width: 680px;
+            width: 100%;
+        }
+        header {
+            margin-bottom: 2.5rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 600;
+            line-height: 1.3;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.02em;
+        }
+        .meta {
+            font-size: 0.875rem;
+            opacity: 0.6;
+        }
+        p {
+            font-size: 1.05rem;
+            margin-bottom: 1.5rem;
+            font-weight: 300;
+        }
+        blockquote {
+            margin: 2rem 0;
+            padding-left: 1.25rem;
+            border-left: 3px solid var(--accent-color);
+            font-style: italic;
+            opacity: 0.9;
+        }
+        .highlight-box {
+            background: rgba(79, 70, 229, 0.05);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin: 2rem 0;
+            border: 1px solid rgba(79, 70, 229, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <article class="container">
+        <header>
+            <h1>การอ่านในยุคดิจิทัล และความสำคัญของ Minimalist Reader</h1>
+            <div class="meta">เผยแพร่เมื่อ 24 พฤศจิกายน • อ่าน 3 นาที</div>
+        </header>
+
+        <p>การอ่านเอกสารหรือไฟล์ HTML ในปัจจุบันมักจะถูกรบกวนด้วยแถบเครื่องมือ โฆษณา หรือ UI ที่ซับซ้อนเกินความจำเป็น เครื่องมือเปิดอ่านที่ดีควรทำหน้าที่เป็นฉากหลังอย่างเงียบๆ เพื่อปล่อยให้ "เนื้อหา" ได้ทำหน้าที่ของมันอย่างสมบูรณ์แบบ</p>
+
+        <blockquote>
+            "ความเรียบง่าย ไม่ใช่การลดทอนสิ่งสำคัญ แต่คือการตัดสิ่งที่ไม่จำเป็นออกไป เพื่อให้สิ่งสำคัญเปล่งประกาย"
+        </blockquote>
+
+        <p>เว็บแอปพลิเคชันนี้ถูกออกแบบมาด้วยแนวคิด **Focus & Readability** โดยมุ่งเน้นความโปร่ง สบายตา และรองรับการนำเข้าไฟล์หลายๆ ไฟล์พร้อมกันเพื่อเลือกอ่านได้อย่างราบรื่น</p>
+
+        <div class="highlight-box">
+            <strong>💡 คำแนะนำใช้งาน:</strong>
+            <ul style="margin: 0.5rem 0 0 1.2rem; padding: 0;">
+                <li>ลากไฟล์ HTML ของคุณมาวาง หรือกดปุ่ม "เพิ่มไฟล์" เพื่อเปิดอ่านหลายๆ ไฟล์</li>
+                <li>คลิกเลือกชื่อไฟล์ที่ Sidebar ด้านซ้ายเพื่อสลับไฟล์ที่ต้องการอ่าน</li>
+            </ul>
+        </div>
+    </article>
+</body>
+</html>`;
+
+        // DOM Elements
+        const fileInput = document.getElementById('fileInput');
+        const htmlFrame = document.getElementById('htmlFrame');
+        const codeViewer = document.getElementById('codeViewer');
+        const previewPane = document.getElementById('previewPane');
+        const codePane = document.getElementById('codePane');
+        const dragOverlay = document.getElementById('dragOverlay');
+        const fileListContainer = document.getElementById('fileList');
+        const fileCountSpan = document.getElementById('fileCount');
+
+        window.onload = () => {
+            setupDragAndDrop();
+            addFileToList('sample.html', sampleHTML);
+        };
+
+        // Add file to internal state
+        function addFileToList(name, content) {
+            const id = 'file_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+            filesList.push({ id, name, content });
+            renderFileList();
+            switchToFile(id);
+        }
+
+        // Render File Sidebar List
+        function renderFileList() {
+            fileCountSpan.textContent = filesList.length;
+            fileListContainer.innerHTML = '';
+
+            if (filesList.length === 0) {
+                fileListContainer.innerHTML = `
+                    <div class="p-4 text-center text-xs text-gray-400 dark:text-gray-500">
+                        ยังไม่มีไฟล์<br>กด "เพิ่มไฟล์" หรือลากไฟล์วาง
+                    </div>`;
+                clearActiveViewer();
+                return;
+            }
+
+            filesList.forEach((file) => {
+                const isActive = file.id === activeFileId;
+                const item = document.createElement('div');
+                item.className = `group flex items-center justify-between p-2 rounded-lg text-xs font-medium cursor-pointer transition-all ${
+                    isActive 
+                        ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/50' 
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/60 border border-transparent'
+                }`;
+
+                item.onclick = () => switchToFile(file.id);
+
+                item.innerHTML = `
+                    <div class="flex items-center gap-2 min-w-0 pr-2">
+                        <i class="${isActive ? 'fa-solid' : 'fa-regular'} fa-file-code ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400'}"></i>
+                        <span class="truncate">${file.name}</span>
+                    </div>
+                    <button onclick="removeFile(event, '${file.id}')" class="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-all" title="ลบไฟล์">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                `;
+
+                fileListContainer.appendChild(item);
+            });
+        }
+
+        // Switch Active Display File
+        function switchToFile(id) {
+            const targetFile = filesList.find(f => f.id === id);
+            if (!targetFile) return;
+
+            activeFileId = id;
+            document.getElementById('displayFileName').textContent = targetFile.name;
+            renderFileList();
+
+            // Render content to iframe
+            const blob = new Blob([targetFile.content], { type: 'text/html;charset=utf-8' });
+            htmlFrame.src = URL.createObjectURL(blob);
+
+            // Highlight source code
+            codeViewer.textContent = targetFile.content;
+            Prism.highlightElement(codeViewer);
+        }
+
+        // Remove Single File
+        function removeFile(event, id) {
+            event.stopPropagation();
+            filesList = filesList.filter(f => f.id !== id);
+
+            if (activeFileId === id) {
+                if (filesList.length > 0) {
+                    switchToFile(filesList[filesList.length - 1].id);
+                } else {
+                    activeFileId = null;
+                    renderFileList();
+                }
+            } else {
+                renderFileList();
+            }
+            showToast('ลบไฟล์เรียบร้อยแล้ว');
+        }
+
+        // Clear All Files
+        function clearAllFiles() {
+            if (filesList.length === 0) return;
+            filesList = [];
+            activeFileId = null;
+            renderFileList();
+            showToast('ลบรายการไฟล์ทั้งหมดแล้ว');
+        }
+
+        function clearActiveViewer() {
+            document.getElementById('displayFileName').textContent = 'ไม่มีไฟล์';
+            htmlFrame.src = 'about:blank';
+            codeViewer.textContent = '';
+        }
+
+        // Handle File Selection (Multiple)
+        function handleFileSelect(event) {
+            const files = event.target.files;
+            if (files.length === 0) return;
+
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    addFileToList(file.name, e.target.result);
+                };
+                reader.readAsText(file);
+            });
+            event.target.value = '';
+            showToast(`อัปโหลด ${files.length} ไฟล์เรียบร้อย`);
+        }
+
+        // Drag & Drop Setup
+        function setupDragAndDrop() {
+            let dragCounter = 0;
+
+            window.addEventListener('dragenter', (e) => {
+                e.preventDefault();
+                dragCounter++;
+                dragOverlay.classList.remove('opacity-0', 'pointer-events-none');
+            });
+
+            window.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                dragCounter--;
+                if (dragCounter === 0) {
+                    dragOverlay.classList.add('opacity-0', 'pointer-events-none');
+                }
+            });
+
+            window.addEventListener('dragover', (e) => e.preventDefault());
+
+            window.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dragCounter = 0;
+                dragOverlay.classList.add('opacity-0', 'pointer-events-none');
+
+                if (e.dataTransfer.files.length > 0) {
+                    Array.from(e.dataTransfer.files).forEach(file => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                            addFileToList(file.name, ev.target.result);
+                        };
+                        reader.readAsText(file);
+                    });
+                    showToast(`เพิ่ม ${e.dataTransfer.files.length} ไฟล์เรียบร้อย`);
+                }
+            });
+        }
+
+        // Sidebar Toggle
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const floatingExpandBtn = document.getElementById('floatingExpandBtn');
+            
+            const isCollapsed = sidebar.classList.toggle('-ml-64');
+            
+            if (isCollapsed) {
+                floatingExpandBtn.classList.remove('hidden');
+            } else {
+                floatingExpandBtn.classList.add('hidden');
+            }
+        }
+
+        // Switch View Modes
+        function setViewMode(mode) {
+            viewMode = mode;
+            const btnPreview = document.getElementById('btnPreview');
+            const btnCode = document.getElementById('btnCode');
+            const btnSplit = document.getElementById('btnSplit');
+
+            const activeClass = ['bg-white', 'dark:bg-gray-700', 'text-indigo-600', 'dark:text-indigo-400', 'shadow-sm'];
+            const inactiveClass = ['text-gray-500', 'dark:text-gray-400', 'hover:text-gray-800', 'dark:hover:text-gray-200'];
+
+            [btnPreview, btnCode, btnSplit].forEach(btn => {
+                btn.classList.remove(...activeClass);
+                btn.classList.add(...inactiveClass);
+            });
+
+            if (mode === 'preview') {
+                btnPreview.classList.add(...activeClass);
+                btnPreview.classList.remove(...inactiveClass);
+                previewPane.classList.remove('hidden');
+                codePane.classList.add('hidden');
+            } else if (mode === 'code') {
+                btnCode.classList.add(...activeClass);
+                btnCode.classList.remove(...inactiveClass);
+                previewPane.classList.add('hidden');
+                codePane.classList.remove('hidden');
+            } else if (mode === 'split') {
+                btnSplit.classList.add(...activeClass);
+                btnSplit.classList.remove(...inactiveClass);
+                previewPane.classList.remove('hidden');
+                codePane.classList.remove('hidden');
+            }
+        }
+
+        // Copy Current Source Code
+        function copyCurrentCode() {
+            const activeFile = filesList.find(f => f.id === activeFileId);
+            if (!activeFile) return;
+
+            const textarea = document.createElement('textarea');
+            textarea.value = activeFile.content;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+
+            showToast('คัดลอกโค้ดเรียบร้อยแล้ว');
+        }
+
+        // Toggle Fullscreen Preview
+        function toggleFullscreen() {
+            const elem = document.getElementById('appBody');
+            if (!document.fullscreenElement) {
+                elem.requestFullscreen().catch(err => showToast('ไม่สามารถขยายเต็มจอได้', 'error'));
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // Dark Mode Toggle
+        function toggleDarkMode() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            document.getElementById('themeIcon').className = isDark ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+        }
+
+        // Notification Toast
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMessage.textContent = message;
+            toastIcon.className = type === 'error' 
+                ? 'fa-solid fa-circle-exclamation text-red-400' 
+                : 'fa-solid fa-circle-check text-green-400';
+
+            toast.classList.remove('translate-y-16', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-16', 'opacity-0');
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
